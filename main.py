@@ -5,6 +5,7 @@ def get_length(c_1, c_2):
 
 class particle:
 	def collision(self, collision_grid):
+		if self.lock: return
 		for i in range(len(collision_grid)):
 			other_particle = self.p_list[i]
 			distance = get_length([self.x, self.y], [other_particle.x, other_particle.y])
@@ -15,12 +16,12 @@ class particle:
 					difference = ((self.radius + other_particle.radius) - distance) / distance 
 					self.x += diffx * 0.5 * difference
 					self.y += diffy * 0.5 * difference
-					self.vx *= (-1)
-					self.vy *= (-1)
 				except Exception as e:
 					pass
 
 	def tick(self, TPS, decay = 0.5):
+		if self.lock:
+			return
 		ix = self.x - self.px
 		iy = self.y - self.py
 
@@ -40,6 +41,7 @@ class particle:
 		self.vy = 0
 		self.px = x
 		self.py = y
+		self.lock = False
 		self.radius = 10
 		self.color = color
 		self.id = len(particle_list)
@@ -47,19 +49,25 @@ class particle:
 		particle_list.append(self)
 
 class link:
-	def tick(self):
+	def tick(self, TPS):
 		distance = get_length([self.p1.x, self.p1.y], [self.p2.x, self.p2.y])
 		diffx = self.p1.x - self.p2.x
 		diffy = self.p1.y - self.p2.y
-		difference = (self.length - distance) / distance
+		try:
+			difference = (self.length - distance) / distance
 
-		if distance > self.length * 2: self.link_list.remove(self)
+			if distance > self.length * 1.8 or distance < self.length * .2: self.link_list.remove(self)
 
-		self.p1.x += diffx * 0.4 * difference
-		self.p1.y += diffy * 0.4 * difference
 
-		self.p2.x -= diffx * 0.4 * difference
-		self.p2.y -= diffy * 0.4 * difference
+			if self.p1.lock == False:
+				self.p1.x += diffx * .5 * difference 
+				self.p1.y += diffy * .5 * difference 
+
+			if self.p2.lock == False:
+				self.p2.x -= diffx * .5 * difference
+				self.p2.y -= diffy * .5 * difference
+		except:
+			pass
 
 
 	def __init__(self, p1, p2, link_list):
@@ -87,7 +95,12 @@ class container:
 			cx = sum(self.all_particles[i].x for i in range(len(self.all_particles))) / len(self.all_particles)
 			cy = sum(self.all_particles[i].y for i in range(len(self.all_particles))) / len(self.all_particles)
 
+		for l in self.link_list:
+			l.tick(TPS)
+
 		for p in self.all_particles:
+			if p.lock:
+				continue
 			p.y += self.gravity / TPS
 			p.tick(TPS, 1)
 
@@ -95,7 +108,7 @@ class container:
 				p.y = self.y + self.h - p.radius
 				p.py = p.y
 				p.vy = 0
-			elif p.y < self.y:
+			elif p.y - p.radius < self.y:
 				p.y = self.y + p.radius
 				p.py = p.y
 				p.vy = 0
@@ -103,7 +116,7 @@ class container:
 				p.x = self.x + self.w - p.radius
 				p.px = p.x
 				p.vx = 0
-			elif p.x < self.x:
+			elif p.x - p.radius < self.x:
 				p.x = self.x + p.radius
 				p.px = p.x
 				p.vx = 0
@@ -111,20 +124,22 @@ class container:
 			if p.x + p.radius > cx:
 				if p.y + p.radius > cy:
 					ctl.append(p.id)
+					p.color = (255, 0, 0)
 				elif p.y - p.radius < cy:
 					cdr.append(p.id)
+					p.color = (255, 255, 0)
 			elif p.x - p.radius < cx:
 				if p.y + p.radius > cy:
+					p.color = (255, 0, 255)
 					cdl.append(p.id)
 				elif p.y - p.radius < cy:
 					ctr.append(p.id)
+					p.color = (255, 255, 255)
+
 
 
 		c_grid = [ctl, ctr, cdl, cdr]
 		[[p.collision(grid) if p.id in grid else None for grid in c_grid] for p in self.all_particles]
-
-		for l in self.link_list:
-			l.tick()
 
 
 
@@ -147,7 +162,7 @@ class container:
 		self.BG = (150, 150, 150)
 		self.border_color = (255, 255, 255)
 		self.center = (x + w / 2, y + h / 2)
-		self.gravity = 9
+		self.gravity = 10
 		self.link_list = []
 		self.all_particles = []
 
@@ -170,15 +185,16 @@ def main():
 	c = container(0, 0, 640, 640)
 
 	jelly = []
-	d = 40
-	for y in range(6):
-		for x in range(10):
-			jelly.append(c.add_particle(x * d + 100, y * d + 100, (255, 255, 255)))
+	d = 30
+	for y in range(0, 20):
+		for x in range(0, 2):
+			p = c.add_particle(x * d   + 100, y * d + 100, (255, 255, 255))
+			jelly.append(p)
 
 	for p1 in jelly:
 		for p2 in jelly:
 			if p1 != p2:
-				if get_length([p1.x, p1.y], [p2.x, p2.y]) < d * 1.5:
+				if get_length([p1.x, p1.y], [p2.x, p2.y]) < d * 2:
 					c.add_link(p1, p2)
 
 
